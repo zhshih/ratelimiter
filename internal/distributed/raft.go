@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 
+	"github.com/zhshih/ratelimiter/internal/config"
 	"github.com/zhshih/ratelimiter/internal/ratelimiter"
 )
 
@@ -35,11 +36,11 @@ type RaftNodeInfo struct {
 	Node *raft.Raft
 }
 
-func CreateRaftNode(nodeID, dataDir, bindAddr string, limiter *ratelimiter.RateLimiter) (*raft.Raft, error) {
+func CreateRaftNode(cfg *config.ConfigRaft, limiter *ratelimiter.RateLimiter) (*raft.Raft, error) {
 	config := raft.DefaultConfig()
-	config.LocalID = raft.ServerID(nodeID)
+	config.LocalID = raft.ServerID(cfg.NodeID)
 
-	logStore, err := raftboltdb.NewBoltStore(dataDir + "/raft-log.bolt")
+	logStore, err := raftboltdb.NewBoltStore(cfg.DataDir + "/raft-log.bolt")
 	if err != nil {
 		return nil, err
 	}
@@ -49,17 +50,17 @@ func CreateRaftNode(nodeID, dataDir, bindAddr string, limiter *ratelimiter.RateL
 		return nil, err
 	}
 
-	snapshotStore, err := raft.NewFileSnapshotStore(dataDir, raftSnapShotRetain, os.Stderr)
+	snapshotStore, err := raft.NewFileSnapshotStore(cfg.DataDir, raftSnapShotRetain, os.Stderr)
 	if err != nil {
 		return nil, err
 	}
 
-	tcpAddr, err := net.ResolveTCPAddr("tcp", bindAddr)
+	tcpAddr, err := net.ResolveTCPAddr("tcp", cfg.BindAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	transport, err := raft.NewTCPTransport(bindAddr, tcpAddr, maxPool, tcpTimeout, os.Stdout)
+	transport, err := raft.NewTCPTransport(cfg.BindAddr, tcpAddr, maxPool, tcpTimeout, os.Stdout)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +75,7 @@ func CreateRaftNode(nodeID, dataDir, bindAddr string, limiter *ratelimiter.RateL
 	configuration := raft.Configuration{
 		Servers: []raft.Server{
 			{
-				ID:      raft.ServerID(nodeID),
+				ID:      raft.ServerID(cfg.NodeID),
 				Address: transport.LocalAddr(),
 			},
 		},

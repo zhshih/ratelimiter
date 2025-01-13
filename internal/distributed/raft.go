@@ -36,7 +36,7 @@ type RaftNodeInfo struct {
 	Node *raft.Raft
 }
 
-func CreateRaftNode(cfg *config.ConfigRaft, limiter *ratelimiter.RateLimiter) (*raft.Raft, error) {
+func NewRaft(cfg *config.ConfigRaft, limiter *ratelimiter.RateLimiter) (*raft.Raft, error) {
 	config := raft.DefaultConfig()
 	config.LocalID = raft.ServerID(cfg.NodeID)
 
@@ -80,7 +80,6 @@ func CreateRaftNode(cfg *config.ConfigRaft, limiter *ratelimiter.RateLimiter) (*
 			},
 		},
 	}
-
 	raftNode.BootstrapCluster(configuration)
 
 	return raftNode, nil

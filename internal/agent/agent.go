@@ -10,21 +10,25 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/zhshih/ratelimiter/internal/api"
 	"github.com/zhshih/ratelimiter/internal/config"
+	"github.com/zhshih/ratelimiter/internal/discovery"
 	"github.com/zhshih/ratelimiter/internal/distributed"
 	"github.com/zhshih/ratelimiter/internal/ratelimiter"
 )
 
 type Agent struct {
-	cfgAPI      *config.ConfigAPI
-	cfgRaft     *config.ConfigRaft
-	ratelimiter *ratelimiter.RateLimiter
-	raftNode    *raft.Raft
+	cfgAPI        *config.ConfigAPI
+	cfgRaft       *config.ConfigRaft
+	cfgMemberShip *config.ConfigMembership
+	ratelimiter   *ratelimiter.RateLimiter
+	raftNode      *raft.Raft
+	membership    *discovery.DiscoveryAgent
 }
 
-func NewAgent(cfgAPI *config.ConfigAPI, cfgRaft *config.ConfigRaft) *Agent {
+func NewAgent(cfgAPI *config.ConfigAPI, cfgRaft *config.ConfigRaft, cfgMemberShip *config.ConfigMembership) *Agent {
 	return &Agent{
-		cfgAPI:  cfgAPI,
-		cfgRaft: cfgRaft,
+		cfgAPI:        cfgAPI,
+		cfgRaft:       cfgRaft,
+		cfgMemberShip: cfgMemberShip,
 	}
 }
 
@@ -38,6 +42,7 @@ func (a *Agent) Launch() {
 	} else {
 		log.Printf("Data directory %s already exists", dataDir)
 	}
+
 	limiter := ratelimiter.NewRateLimiter()
 	a.ratelimiter = limiter
 
@@ -45,11 +50,17 @@ func (a *Agent) Launch() {
 		log.Fatalf("Failed to create Raft node: %v", err)
 	}
 
-	a.launchAPI()
+	if err := a.initMembership(); err != nil {
+		log.Fatalf("Failed to create membership: %v", err)
+	}
+
+	if err := a.launchAPI(); err != nil {
+		log.Fatalf("Failed to launch API Server: %v", err)
+	}
 }
 
 func (a *Agent) initRaft(dataDir string) error {
-	raftNode, err := distributed.CreateRaftNode(
+	raftNode, err := distributed.NewRaft(
 		&config.ConfigRaft{
 			NodeID:   a.cfgRaft.NodeID,
 			BindAddr: a.cfgRaft.BindAddr,
@@ -64,7 +75,16 @@ func (a *Agent) initRaft(dataDir string) error {
 	return nil
 }
 
-func (a *Agent) launchAPI() {
+func (a *Agent) initMembership() error {
+	membership, err := discovery.New(a.cfgMemberShip, a.raftNode)
+	if err != nil {
+		return err
+	}
+	a.membership = membership
+	return nil
+}
+
+func (a *Agent) launchAPI() error {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
@@ -86,6 +106,7 @@ func (a *Agent) launchAPI() {
 	serverPort := fmt.Sprintf(":%d", a.cfgAPI.Port)
 	log.Printf("Rate limiter running on %s", serverPort)
 	if err := router.Run(serverPort); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		return err
 	}
+	return nil
 }

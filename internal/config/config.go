@@ -9,3 +9,10 @@ type ConfigRaft struct {
 type ConfigAPI struct {
 	Port int `json:"port"`
 }
+
+type ConfigMembership struct {
+	NodeName       string            `json:"nodeName"`
+	BindAddr       string            `json:"bindAddr"`
+	Tags           map[string]string `json:"tags"`
+	StartJoinAddrs []string          `json:"startJoinAddrs"`
+}

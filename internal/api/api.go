@@ -53,18 +53,19 @@ func (h *APIHandler) IncrementQuotaHandler(c *gin.Context) {
 		return
 	}
 
-	_, ok := applyFuture.Response().(*distributed.ApplyResponse)
+	response, ok := applyFuture.Response().(*distributed.ApplyResponse)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{"result": false, "error": "Error response is not matched"})
 		return
 	}
 
-	// if !h.RateLimiter.AllowRequest(clientID) {
-	// 	c.JSON(http.StatusTooManyRequests, gin.H{"result": false, "error": "Quota exceeded."})
-	// 	return
-	// }
+	if response.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"result": false, "error": fmt.Sprintf("Error response: %s", response.Error.Error())})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"result": true})
+	result := response.Data.(bool)
+	c.JSON(http.StatusOK, gin.H{"result": result})
 }
 
 func (h *APIHandler) ResetQuotaHandler(c *gin.Context) {
@@ -97,6 +98,6 @@ func (h *APIHandler) ResetQuotaHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"result": false, "error": "Error response is not matched"})
 		return
 	}
-	// h.RateLimiter.ResetQuota(clientID)
+	h.RateLimiter.ResetQuota(clientID)
 	c.JSON(http.StatusOK, gin.H{"result": true})
 }

@@ -91,8 +91,7 @@ func (a *Agent) launchAPI() error {
 	raftHandler := &api.RaftHandler{
 		RaftNode: a.raftNode,
 	}
-	router.POST("/raft/join", raftHandler.JoinRaftHandler)
-	router.POST("/raft/remove", raftHandler.RemoveRaftHandler)
+
 	router.GET("/raft/stats", raftHandler.StatsRaftHandler)
 
 	apiHandler := &api.APIHandler{

@@ -1,17 +1,23 @@
 package ratelimiter
 
 import (
+	"log"
 	"sync"
 	"time"
 )
 
 type RateLimitInfo struct {
-	Info map[string]*clientQuota
+	Info map[string]*ClientRateLimit
 }
 
 type RateLimiter struct {
 	limits *RateLimitInfo
 	mu     sync.Mutex
+}
+
+type ClientRateLimit struct {
+	Quota       *clientQuota
+	tokenBucket *TokenBucket
 }
 
 type clientQuota struct {
@@ -23,7 +29,7 @@ type clientQuota struct {
 func NewRateLimiter() *RateLimiter {
 	return &RateLimiter{
 		limits: &RateLimitInfo{
-			Info: make(map[string]*clientQuota),
+			Info: make(map[string]*ClientRateLimit),
 		},
 	}
 }
@@ -36,13 +42,18 @@ func (rl *RateLimiter) CheckQuota(clientID string) int {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	quota, exists := rl.limits.Info[clientID]
+	clientRateLimit, exists := rl.limits.Info[clientID]
 	remaining := 0
 	if exists {
-		remaining = quota.limit - quota.count
-		if remaining < 0 {
-			remaining = 0
+		resetTime := clientRateLimit.Quota.resetTime
+		if time.Now().After(resetTime) {
+			log.Printf("Ratelimit is reset to clientID = %s", clientID)
+			clientRateLimit = rl.resetRateLimit()
+			rl.limits.Info[clientID] = clientRateLimit
 		}
+
+		remaining = clientRateLimit.Quota.limit - clientRateLimit.Quota.count
+		remaining = max(0, remaining)
 	} else {
 		remaining = 10
 	}
@@ -53,22 +64,20 @@ func (rl *RateLimiter) AllowRequest(clientID string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	quota, exists := rl.limits.Info[clientID]
+	clientRateLimit, exists := rl.limits.Info[clientID]
 	if !exists {
-		quota = &clientQuota{
-			limit:     10,
-			count:     0,
-			resetTime: time.Now().Add(1 * time.Minute),
-		}
-		rl.limits.Info[clientID] = quota
+		clientRateLimit = rl.resetRateLimit()
+		rl.limits.Info[clientID] = clientRateLimit
 	}
 
-	if time.Now().After(quota.resetTime) {
-		quota.count = 0
-		quota.resetTime = time.Now().Add(1 * time.Minute)
+	resetTime := clientRateLimit.Quota.resetTime
+	if time.Now().After(resetTime) {
+		log.Printf("Ratelimit is reset to clientID = %s", clientID)
+		rl.limits.Info[clientID] = rl.resetRateLimit()
 	}
 
-	if quota.count < quota.limit {
+	quota := clientRateLimit.Quota
+	if quota.count < quota.limit && clientRateLimit.tokenBucket.tryConsume() {
 		quota.count++
 		return true
 	}
@@ -80,8 +89,20 @@ func (rl *RateLimiter) ResetQuota(clientID string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	if quota, exists := rl.limits.Info[clientID]; exists {
-		quota.count = 0
-		quota.resetTime = time.Now().Add(1 * time.Minute)
+	if _, exists := rl.limits.Info[clientID]; exists {
+		log.Printf("Ratelimit is reset to clientID = %s", clientID)
+		rl.limits.Info[clientID] = rl.resetRateLimit()
+	}
+
+}
+
+func (rl *RateLimiter) resetRateLimit() *ClientRateLimit {
+	return &ClientRateLimit{
+		Quota: &clientQuota{
+			limit:     10,
+			count:     0,
+			resetTime: time.Now().Add(1 * time.Minute),
+		},
+		tokenBucket: NewTokenBucket(10, 1),
 	}
 }

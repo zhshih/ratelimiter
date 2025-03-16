@@ -1,0 +1,59 @@
+version: "3.7"
+services:
+  node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ID: "node-1"
+      SERVER_PORT: "20001"
+      RAFT_PORT: "50001"
+      RAFT_VOL_DIR: "node-1"
+      DISCOVERY_PORT: "50011"
+      CLUSTERS: "127.0.0.1:50011,127.0.0.1:50012,127.0.0.1:50013"
+    ports:
+      - "20001:20001"
+      - "50001:50001"
+      - "50011:50011"
+    networks:
+      - ratelimiter-network
+
+  node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ID: "node-2"
+      SERVER_PORT: "20002"
+      RAFT_PORT: "50002"
+      RAFT_VOL_DIR: "node-2"
+      DISCOVERY_PORT: "50012"
+      CLUSTERS: "127.0.0.1:50011,127.0.0.1:50012,127.0.0.1:50013"
+    ports:
+      - "20002:20002"
+      - "50002:50002"
+      - "50012:50012"
+    networks:
+      - ratelimiter-network
+
+  node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ID: "node-3"
+      SERVER_PORT: "20003"
+      RAFT_PORT: "50003"
+      RAFT_VOL_DIR: "node-3"
+      DISCOVERY_PORT: "50013"
+      CLUSTERS: "127.0.0.1:50011,127.0.0.1:50012,127.0.0.1:50013"
+    ports:
+      - "20003:20003"
+      - "50003:50003"
+      - "50013:50013"
+    networks:
+      - ratelimiter-network
+
+networks:
+  ratelimiter-network:
+    driver: bridge
